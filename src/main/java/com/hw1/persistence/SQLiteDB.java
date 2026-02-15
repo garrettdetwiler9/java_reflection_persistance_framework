@@ -79,7 +79,64 @@ public class SQLiteDB {
      * Check the handout for more details.
      */
     public void insertRow(Object obj) throws SQLException, IllegalAccessException {
-       
+        // get obj class and fields, store in vars
+        Class<?> c = obj.getClass();
+        Field[] fields = c.getDeclaredFields();
+
+        // store @Persistable fields in List
+        List<Field> persistables = new ArrayList<>();
+        for (Field f : fields) {
+            if (f.isAnnotationPresent(Persistable.class)) {
+                persistables.add(f);
+            }
+        }
+
+        // make INSERT query
+        StringBuilder sql = new StringBuilder("INSERT INTO ");
+        sql.append(c.getSimpleName()).append(" ("); // " (" for col names
+
+        // col names
+        for (int i = 0; i < persistables.size(); i++) {
+            Field f = persistables.get(i);
+            sql.append(dbHelper.camelToSnakeCase(f.getName())); // make cases compatible between Java and SQLite
+            if (i < persistables.size() - 1) { // don't add for last item
+                sql.append(", "); // prep next 
+            }
+        }
+        sql.append(") VALUES ("); // ")" ends col names, "VALUES (" sets up vals
+
+        // temp names
+        for (int i = 0; i < persistables.size(); i++) {
+            sql.append("?"); // data will be inserted momentarily
+            if (i < persistables.size() - 1) { // don't add for last item
+                sql.append(", "); // prep next 
+            }
+        }
+        sql.append(")"); // cap val names with ")"
+
+        // perform INSERT query
+        try (PreparedStatement ps = connection.prepareStatement(sql.toString())) {
+            // set field vals
+            for (int i = 0; i < persistables.size(); i++) {
+                Field f = persistables.get(i);
+                f.setAccessible(true);
+                Object val = f.get(obj);
+
+                // set data based on type
+                // I'm genuinely upset that switch statements don't support f.getType()
+                if (f.getType() == String.class) {
+                    ps.setString(i + 1, (String) val);
+                } else if (f.getType() == byte[].class) {
+                    ps.setBytes(i + 1, (byte[]) val);
+                } else if (f.getType() == int.class || f.getType() == Integer.class) {
+                    ps.setInt(i + 1, (Integer) val);
+                } 
+            }
+
+            ps.executeUpdate(); // execute query
+        }
+        
+
     }
 
     /**
@@ -91,6 +148,8 @@ public class SQLiteDB {
      * 
      */
     public <T> T loadRow(T obj) throws SQLException, IllegalAccessException {
+
+
         // Return null if no row was found
         return null;
     }
